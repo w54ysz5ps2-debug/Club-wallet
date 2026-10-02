@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Club Wallet – Tokeni</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#09090b;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{padding:18px;border-bottom:1px solid #29292f;background:#111114;position:sticky;top:0;z-index:5}
+.wrap{max-width:620px;margin:auto;padding:18px}.brand{font-size:22px;font-weight:850}.muted{color:#a1a1aa}
+.card{background:#18181b;border:1px solid #2b2b31;border-radius:18px;padding:18px;margin:12px 0}
+button,input{font:inherit}button{border:0;border-radius:12px;padding:13px 16px;font-weight:800;background:#fff;color:#09090b;cursor:pointer}
+.dark{background:#27272a;color:#fff}.full{width:100%}
+input{width:100%;padding:14px;border-radius:12px;border:1px solid #36363d;background:#18181b;color:#fff;margin:6px 0 12px}
+.notice{padding:12px;border-radius:12px;background:#1e1b4b;color:#ddd6fe;margin:12px 0}
+.error{padding:12px;border-radius:12px;background:#3f1515;color:#fecaca;margin:12px 0}
+.success{padding:12px;border-radius:12px;background:#12351f;color:#bbf7d0;margin:12px 0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}.login{max-width:420px;margin:55px auto}
+</style>
+</head>
+<body>
+<header><div class="top"><div><div class="brand">🎟️ CLUB WALLET – TOKENI</div><div class="muted">Interfața pentru încărcarea tokenilor</div></div><button id="logoutBtn" class="dark" onclick="logoutPaza()" style="display:none">Ieșire</button></div></header>
+
+<main class="wrap">
+<section id="loginBox" class="card login">
+  <h2>Autentificare Pază</h2>
+  <p class="muted">Introdu datele de acces pentru încărcarea tokenilor.</p>
+  <label>Utilizator</label>
+  <input id="loginUser" autocomplete="username" placeholder="diferit paza">
+  <label>Parolă</label>
+  <input id="loginPass" type="password" autocomplete="current-password" placeholder="Parolă">
+  <button class="full" onclick="loginPaza()">Intră în interfața Pază</button>
+  <div id="loginMsg"></div>
+</section>
+
+<section id="app" style="display:none">
+  <div id="msg"></div>
+  <section class="card">
+    <h2>Încarcă tokeni</h2>
+    <p class="muted">Introdu emailul clientului și numărul de tokeni.</p>
+    <label>Email client</label>
+    <input id="clientEmail" type="email" placeholder="client@email.ro" autocomplete="off">
+    <label>Număr tokeni</label>
+    <input id="amount" type="number" min="1" step="1" placeholder="Ex: 50" inputmode="numeric">
+    <label>Referință (opțional)</label>
+    <input id="reference" placeholder="Cash / POS / notă">
+    <button class="full" onclick="topup()">💰 Adaugă tokeni</button>
+  </section>
+  <section class="card">
+    <h2>Valori rapide</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button onclick="setAmount(10)">+10</button>
+      <button onclick="setAmount(20)">+20</button>
+      <button onclick="setAmount(50)">+50</button>
+      <button onclick="setAmount(100)">+100</button>
+    </div>
+  </section>
+</section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL='https://kkawbtnamvmequxlyfij.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_223ErHbwq0NITqobHwqnrw_YbkXws-W';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const STAFF_USER='diferit paza',STAFF_PASS='diferit.';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function msg(t,type='notice'){document.getElementById('msg').innerHTML=t?`<div class="${type}">${esc(t)}</div>`:''}
+function loginPaza(){
+  const u=document.getElementById('loginUser').value.trim();
+  const p=document.getElementById('loginPass').value;
+  if(u===STAFF_USER && p===STAFF_PASS){
+    sessionStorage.setItem('club_staff_role','paza');
+    document.getElementById('loginBox').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.getElementById('logoutBtn').style.display='block';
+  }else{
+    document.getElementById('loginMsg').innerHTML='<div class="error">Utilizator sau parolă greșită.</div>';
+  }
+}
+function isLogged(){return sessionStorage.getItem('club_staff_role')==='paza'}
+function requireLogin(){
+  if(isLogged()){
+    document.getElementById('loginBox').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.getElementById('logoutBtn').style.display='block';
+  }
+}
+function logoutPaza(){sessionStorage.removeItem('club_staff_role');location.reload()}
+function setAmount(n){document.getElementById('amount').value=n}
+async function topup(){
+  if(!isLogged())return;
+  const email=document.getElementById('clientEmail').value.trim();
+  const amount=Number(document.getElementById('amount').value);
+  const reference=document.getElementById('reference').value.trim()||null;
+  if(!email||!amount||amount<1)return msg('Completează emailul clientului și numărul de tokeni.','error');
+  const {data,error}=await sb.rpc('staff_topup',{p_username:STAFF_USER,p_password:STAFF_PASS,p_email:email,p_amount:amount,p_reference:reference});
+  if(error){msg(error.message,'error');return}
+  msg(`Au fost adăugați ${amount} tokeni. Soldul nou este ${data.balance} tokeni.`,'success');
+  document.getElementById('amount').value='';
+  document.getElementById('reference').value='';
+}
+requireLogin();
+</script>
+</body>
+</html>
