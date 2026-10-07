@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Club Wallet - Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;font-family:Arial,sans-serif}body{margin:0;background:#090909;color:#fff}
+.header{padding:22px 18px;background:linear-gradient(135deg,#160000,#330000);border-bottom:1px solid #5c0000}
+.container{padding:18px;max-width:1200px;margin:auto}.login{max-width:430px;margin:70px auto;background:#151515;padding:25px;border-radius:18px;border:1px solid #333}
+input,select{width:100%;padding:13px;margin:0 0 12px;background:#0d0d0d;color:#fff;border:1px solid #444;border-radius:10px}
+button{border:0;padding:12px 16px;border-radius:10px;background:#d00000;color:#fff;font-weight:bold}.hidden{display:none!important}
+.tabs{display:flex;gap:8px;overflow:auto;margin-bottom:18px}.tab{white-space:nowrap;background:#191919;border:1px solid #333}.active{background:#c00000!important}
+.section,.card{background:#151515;border:1px solid #2d2d2d;border-radius:16px;padding:18px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.label{color:#999;font-size:13px}.value{font-size:27px;font-weight:bold;margin-top:8px}
+.status{margin-top:12px;padding:12px;border-radius:10px;background:#1b1b1b}.error{color:#ff5d5d}.success{color:#42d77d}
+.products{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.product{background:#191919;padding:15px;border-radius:13px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #292929}th{color:#aaa}
+.table{overflow-x:auto}.logout{float:right;background:#333}
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login">
+<h2>🔐 Club Wallet Manager</h2>
+<input id="email" type="email" placeholder="Email">
+<input id="password" type="password" placeholder="Parolă">
+<button onclick="login()" style="width:100%">Intră în Manager</button>
+<div id="loginStatus" class="status"></div>
+</div>
+
+<div id="managerScreen" class="hidden">
+<div class="header">
+<button class="logout" onclick="logout()">Ieșire</button>
+<h1>Club Wallet — Manager</h1>
+<p id="managerEmail">Manager</p>
+</div>
+
+<div class="container">
+<div class="tabs">
+<button class="tab active" onclick="show('dashboard',this)">📊 Dashboard</button>
+<button class="tab" onclick="show('stock',this)">📦 Stoc</button>
+<button class="tab" onclick="show('employees',this)">👥 Angajați</button>
+<button class="tab" onclick="show('attendance',this)">🕐 Pontaj</button>
+<button class="tab" onclick="show('protocol',this)">🎟️ Protocol</button>
+<button class="tab" onclick="show('receipts',this)">🧾 Facturi</button>
+<button class="tab" onclick="show('sales',this)">💰 Vânzări</button>
+</div>
+
+<div id="dashboard" class="section">
+<h2>Dashboard</h2>
+<div class="grid">
+<div class="card"><div class="label">Produse</div><div id="totalProducts" class="value">-</div></div>
+<div class="card"><div class="label">Stoc total</div><div id="totalStock" class="value">-</div></div>
+<div class="card"><div class="label">Comenzi</div><div id="totalOrders" class="value">-</div></div>
+<div class="card"><div class="label">Tokeni vânduți</div><div id="totalSales" class="value">-</div></div>
+</div>
+<div class="status">Conectat la Supabase.</div>
+</div>
+
+<div id="stock" class="section hidden"><h2>📦 Stoc produse</h2><div id="productsList" class="products">Se încarcă...</div></div>
+
+<div id="employees" class="section hidden">
+<h2>👥 Angajați</h2>
+<input id="employeeName" placeholder="Nume angajat">
+<input id="employeeUsername" placeholder="Username">
+<input id="employeeEmail" type="email" placeholder="Email">
+<select id="employeeRole"><option value="bartender">Barman</option><option value="paza">Pază</option><option value="dj">DJ</option></select>
+<input id="employeeProtocol" type="number" placeholder="Protocol tokeni" value="0">
+<button onclick="createInvite()">Creează invitație</button>
+<div id="employeeStatus" class="status"></div>
+<br><h3>Angajați existenți</h3>
+<div class="table"><table><thead><tr><th>Nume</th><th>Email</th><th>Rol</th><th>Activ</th></tr></thead><tbody id="employeesTable"></tbody></table></div>
+</div>
+
+<div id="attendance" class="section hidden"><h2>🕐 Pontaj</h2><div class="table"><table><thead><tr><th>Angajat</th><th>Data</th><th>Intrare</th><th>Ieșire</th></tr></thead><tbody id="attendanceTable"></tbody></table></div></div>
+
+<div id="protocol" class="section hidden"><h2>🎟️ Protocol angajați</h2><div class="table"><table><thead><tr><th>Angajat</th><th>Limită</th><th>Consum</th><th>Rămas</th></tr></thead><tbody id="protocolTable"></tbody></table></div></div>
+
+<div id="receipts" class="section hidden">
+<h2>🧾 Facturi furnizori</h2>
+<p>Modulul de fotografiere, confirmare stoc și PDF va fi conectat după verificarea accesului Manager.</p>
+</div>
+
+<div id="sales" class="section hidden"><h2>💰 Vânzări</h2><div class="table"><table><thead><tr><th>Comandă</th><th>Tokeni</th><th>Status</th><th>Data</th></tr></thead><tbody id="salesTable"></tbody></table></div></div>
+</div></div>
+
+<script>
+const SUPABASE_URL="https://kkawbtnamvmequxlyfij.supabase.co";
+const SUPABASE_KEY="sb_publishable_223ErHbwq0NITqobHwqnrw_YbkXws-W";
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+function esc(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}
+
+async function login(){
+ const email=document.getElementById("email").value.trim(),password=document.getElementById("password").value,status=document.getElementById("loginStatus");
+ status.textContent="Se verifică...";
+ const {data,error}=await sb.auth.signInWithPassword({email,password});
+ if(error){status.innerHTML='<span class="error">'+esc(error.message)+'</span>';return}
+ const {data:p,error:pe}=await sb.from("profiles").select("id,email,full_name,role,active").eq("id",data.user.id).single();
+ if(pe||!p){await sb.auth.signOut();status.innerHTML='<span class="error">Profilul nu a fost găsit.</span>';return}
+ if(p.role!=="manager"||p.active!==true){await sb.auth.signOut();status.innerHTML='<span class="error">Acest cont nu are acces la Manager.</span>';return}
+ await openManager(p)
+}
+async function openManager(p){
+ document.getElementById("loginScreen").classList.add("hidden");document.getElementById("managerScreen").classList.remove("hidden");
+ document.getElementById("managerEmail").textContent=p.full_name||p.email||"Manager";
+ await Promise.all([dashboard(),products(),employees(),attendance(),protocol(),sales()])
+}
+async function logout(){await sb.auth.signOut();location.reload()}
+function show(id,b){document.querySelectorAll(".section").forEach(x=>x.classList.add("hidden"));document.getElementById(id).classList.remove("hidden");document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active")}
+
+async function dashboard(){
+ const {data:p}=await sb.from("products").select("stock");if(p){document.getElementById("totalProducts").textContent=p.length;document.getElementById("totalStock").textContent=p.reduce((s,x)=>s+Number(x.stock||0),0)}
+ const {data:o}=await sb.from("orders").select("total_tokens");if(o){document.getElementById("totalOrders").textContent=o.length;document.getElementById("totalSales").textContent=o.reduce((s,x)=>s+Number(x.total_tokens||0),0)}
+}
+async function products(){
+ const c=document.getElementById("productsList"),{data,error}=await sb.from("products").select("*").order("category").order("name");
+ if(error){c.innerHTML='<span class="error">'+esc(error.message)+'</span>';return}
+ c.innerHTML=(data||[]).map(p=>'<div class="product"><h3>'+esc(p.name)+'</h3><p>Categoria: '+esc(p.category||"-")+'</p><p>Preț: '+Number(p.price||0)+' tokeni</p><p>Stoc: <b>'+Number(p.stock||0)+'</b></p></div>').join("")||"<p>Nu există produse.</p>"
+}
+async function employees(){
+ const t=document.getElementById("employeesTable"),{data,error}=await sb.from("profiles").select("full_name,email,role,active").in("role",["manager","bartender","paza","dj"]).order("full_name");
+ if(error){t.innerHTML='<tr><td colspan="4" class="error">'+esc(error.message)+'</td></tr>';return}
+ t.innerHTML=(data||[]).map(e=>'<tr><td>'+esc(e.full_name||"-")+'</td><td>'+esc(e.email||"-")+'</td><td>'+esc(e.role||"-")+'</td><td>'+(e.active?"Da":"Nu")+'</td></tr>').join("")
+}
+async function createInvite(){
+ const name=document.getElementById("employeeName").value.trim(),username=document.getElementById("employeeUsername").value.trim(),email=document.getElementById("employeeEmail").value.trim(),role=document.getElementById("employeeRole").value,protocol=Number(document.getElementById("employeeProtocol").value||0),st=document.getElementById("employeeStatus");
+ if(!name||!username||!email){st.innerHTML='<span class="error">Completează numele, username-ul și emailul.</span>';return}
+ st.textContent="Se creează invitația...";
+ const {data,error}=await sb.rpc("manager_create_employee_invite",{p_full_name:name,p_username:username,p_email:email,p_role:role,p_protocol_limit:protocol});
+ if(error){st.innerHTML='<span class="error">'+esc(error.message)+'</span>';return}
+ st.innerHTML='<span class="success">Invitația a fost creată.</span><br><br>'+esc(JSON.stringify(data));await employees()
+}
+async function attendance(){
+ const t=document.getElementById("attendanceTable"),{data,error}=await sb.from("staff_attendance").select("*").order("work_date",{ascending:false}).limit(50);
+ if(error){t.innerHTML='<tr><td colspan="4">'+esc(error.message)+'</td></tr>';return}
+ t.innerHTML=(data||[]).map(r=>'<tr><td>'+esc(r.user_id||"-")+'</td><td>'+esc(r.work_date||"-")+'</td><td>'+esc(r.clock_in||"-")+'</td><td>'+esc(r.clock_out||"-")+'</td></tr>').join("")
+}
+async function protocol(){
+ const t=document.getElementById("protocolTable"),{data,error}=await sb.from("staff_allowances").select("*").order("date",{ascending:false}).limit(50);
+ if(error){t.innerHTML='<tr><td colspan="4">'+esc(error.message)+'</td></tr>';return}
+ t.innerHTML=(data||[]).map(r=>'<tr><td>'+esc(r.user_id||"-")+'</td><td>'+Number(r.tokens||0)+'</td><td>-</td><td>-</td></tr>').join("")
+}
+async function sales(){
+ const t=document.getElementById("salesTable"),{data,error}=await sb.from("orders").select("order_code,total_tokens,status,created_at").order("created_at",{ascending:false}).limit(100);
+ if(error){t.innerHTML='<tr><td colspan="4">'+esc(error.message)+'</td></tr>';return}
+ t.innerHTML=(data||[]).map(o=>'<tr><td>'+esc(o.order_code||"-")+'</td><td>'+Number(o.total_tokens||0)+'</td><td>'+esc(o.status||"-")+'</td><td>'+new Date(o.created_at).toLocaleString("ro-RO")+'</td></tr>').join("")
+}
+async function check(){
+ const {data:{session}}=await sb.auth.getSession();if(!session)return;
+ const {data:p}=await sb.from("profiles").select("id,email,full_name,role,active").eq("id",session.user.id).single();
+ if(p&&p.role==="manager"&&p.active===true)await openManager(p)
+}
+check()
+</script>
+</body>
+</html>
